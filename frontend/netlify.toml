@@ -1,0 +1,14 @@
+# Netlify 部署配置
+# Netlify 会进入 frontend/ 目录（base = ".")，
+# 然后执行 npm install && npm run build，把 dist/ 部署上线
+
+[build]
+  base = "frontend"
+  command = "npm install && npm run build"
+  publish = "dist"
+
+# SPA 单页路由：任何 404 都回退到 index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

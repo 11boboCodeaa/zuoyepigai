@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: zuoyepigai-backend
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DASHSCOPE_API_KEY
+        sync: false
+      - key: ACCESS_TOKEN
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: QWEN_VL_MODEL
+        value: qwen-vl-max-latest
+    healthCheckPath: /api/health
