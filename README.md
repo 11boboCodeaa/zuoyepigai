@@ -1,3 +1,14 @@
+---
+title: zuoyepigai
+emoji: "✏️"
+colorFrom: indigo
+colorTo: pink
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: 基于通义千问VL的语文作业AI批改工具
+---
+
 # 作业批改助手
 
 > 基于通义千问 VL 的语文作业 AI 批改工具，目标是把老师从重复性批改中解放出来。
