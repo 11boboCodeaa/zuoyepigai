@@ -1,5 +1,5 @@
 from typing import List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TypoItem(BaseModel):
@@ -19,13 +19,17 @@ class SentenceIssue(BaseModel):
 
 class EssayResult(BaseModel):
     """作文批改结果"""
+    # model_essay 字段以 model_ 开头会和 pydantic 受保护命名空间冲突，禁用该保护
+    model_config = ConfigDict(protected_namespaces=())
+
     recognized_text: str = Field(..., description="OCR识别出的作文原文")
     title: str = Field("", description="作文题目（如能识别）")
     genre: str = Field("", description="文体，如：导游词 / 记叙文 / 议论文 等")
     word_count: int = Field(0, description="字数")
     typos: List[TypoItem] = Field(default_factory=list, description="错别字列表")
     sentence_issues: List[SentenceIssue] = Field(default_factory=list, description="病句列表")
-    revised_text: str = Field("", description="修改后的清洁版全文（保留学生笔法）")
+    revised_text: str = Field("", description="修改后的清洁版全文（保留学生笔法的扫盲版）")
+    model_essay: str = Field("", description="过关级范文（以学生主题/人物/事件为骨架重写的过关版）")
     structure_comment: str = Field("", description="结构评价")
     content_comment: str = Field("", description="立意/内容评价")
     language_comment: str = Field("", description="语言/文采评价")

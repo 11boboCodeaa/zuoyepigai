@@ -11,6 +11,12 @@ export interface SentenceIssue {
   issue_type: string;
 }
 
+export interface EssayCorrectOptions {
+  topic?: string;
+  grade?: string;
+  wordCount?: number;
+}
+
 export interface EssayResult {
   recognized_text: string;
   title: string;
@@ -19,6 +25,7 @@ export interface EssayResult {
   typos: TypoItem[];
   sentence_issues: SentenceIssue[];
   revised_text: string;
+  model_essay: string;
   structure_comment: string;
   content_comment: string;
   language_comment: string;
@@ -42,6 +49,12 @@ export interface SubjectiveQuestionItem {
 export interface SubjectiveResult {
   items: SubjectiveQuestionItem[];
   summary: string;
+}
+
+export interface TopicOcrResult {
+  title: string;
+  requirements: string;
+  combined: string;
 }
 
 // API 基础地址：
@@ -80,10 +93,23 @@ async function postForm<T>(path: string, form: FormData): Promise<T> {
   return resp.json();
 }
 
-export function correctEssay(image: File): Promise<EssayResult> {
+export function correctEssay(
+  image: File,
+  options?: EssayCorrectOptions,
+): Promise<EssayResult> {
   const fd = new FormData();
   fd.append("image", image);
+  if (options?.topic && options.topic.trim()) fd.append("topic", options.topic.trim());
+  if (options?.grade && options.grade.trim()) fd.append("grade", options.grade.trim());
+  if (options?.wordCount && options.wordCount > 0)
+    fd.append("target_word_count", String(options.wordCount));
   return postForm<EssayResult>("/api/correct/essay", fd);
+}
+
+export function ocrTopic(image: File): Promise<TopicOcrResult> {
+  const fd = new FormData();
+  fd.append("image", image);
+  return postForm<TopicOcrResult>("/api/ocr/topic", fd);
 }
 
 export function correctSubjective(

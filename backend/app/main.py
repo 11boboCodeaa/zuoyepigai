@@ -12,15 +12,17 @@ from typing import Optional
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from .prompts import (
     ESSAY_SYSTEM,
-    ESSAY_USER,
     SUBJECTIVE_SYSTEM,
     SUBJECTIVE_USER_NO_REF,
     SUBJECTIVE_USER_TEMPLATE,
+    TOPIC_OCR_SYSTEM,
+    TOPIC_OCR_USER,
+    build_essay_user_prompt,
 )
 from .qwen_client import QwenError, call_qwen_vl
 from .schemas import EssayResult, SubjectiveResult
@@ -38,12 +40,28 @@ for candidate in (
 
 app = FastAPI(title="作业批改助手 API", version="0.1.0")
 
+# CORS：通过 ALLOWED_ORIGINS 环境变量控制（多个用逗号分隔），未配置时允许所有
+_origins_env = os.getenv("ALLOWED_ORIGINS", "").strip()
+_allow_origins = [o.strip() for o in _origins_env.split(",") if o.strip()] or ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allow_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# 访问令牌校验：通过 ACCESS_TOKEN 环境变量配置一个共享密码
+# 前端请求需在 X-Access-Token 头里带相同的值；未配置时跳过（方便本地开发）
+def require_access_token(
+    x_access_token: Optional[str] = Header(default=None),
+) -> None:
+    expected = os.getenv("ACCESS_TOKEN", "").strip()
+    if not expected:
+        return
+    if x_access_token != expected:
+        raise HTTPException(401, "无效的访问令牌（X-Access-Token）")
 
 
 ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
@@ -70,20 +88,61 @@ def health():
     }
 
 
-@app.post("/api/correct/essay", response_model=EssayResult)
-async def correct_essay(
+@app.post("/api/ocr/topic")
+async def ocr_topic(
     image: UploadFile = File(...),
     _: None = Depends(require_access_token),
 ):
-    """批改作文：识别原文、找错别字病句、给评语和分数。"""
+    """从图片中识别作文题目和写作要求。返回 title / requirements / combined 三个字段。"""
     data = await image.read()
     mime = _validate_image(image, data)
 
     try:
         raw = call_qwen_vl(
             image_bytes=data,
+            system_prompt=TOPIC_OCR_SYSTEM,
+            user_prompt=TOPIC_OCR_USER,
+            mime=mime,
+        )
+    except QwenError as e:
+        raise HTTPException(502, str(e))
+
+    return {
+        "title": str(raw.get("title", "")).strip(),
+        "requirements": str(raw.get("requirements", "")).strip(),
+        "combined": str(raw.get("combined", "")).strip(),
+    }
+
+
+@app.post("/api/correct/essay", response_model=EssayResult)
+async def correct_essay(
+    image: UploadFile = File(...),
+    topic: Optional[str] = Form(None),
+    grade: Optional[str] = Form(None),
+    target_word_count: Optional[int] = Form(None),
+    _: None = Depends(require_access_token),
+):
+    """批改作文：双产出（修改稿 + 过关范文）+ 错别字/病句/评分。
+
+    可选参数：
+    - topic：作文题目/主旨要求（如需严格按题生成范文）
+    - grade：学生年级（如 “小学三年级”），决定语言难度
+    - target_word_count：范文目标字数
+    """
+    data = await image.read()
+    mime = _validate_image(image, data)
+
+    user_prompt = build_essay_user_prompt(
+        topic=topic,
+        grade=grade,
+        target_word_count=target_word_count,
+    )
+
+    try:
+        raw = call_qwen_vl(
+            image_bytes=data,
             system_prompt=ESSAY_SYSTEM,
-            user_prompt=ESSAY_USER,
+            user_prompt=user_prompt,
             mime=mime,
         )
     except QwenError as e:
